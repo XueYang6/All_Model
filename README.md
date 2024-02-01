@@ -6,3 +6,7 @@
 
 3. 训练模型
 在train/trian_seg.py中调整设置并训练，注意不是seg.train.py的文件，一般来说我已经默认设置了二分类的代码，你只需要更改annotation_path与image_dir即可
+
+# 使用UNet
+1. 下载所需库
+2. 找到train/seg_train.py中调整设置并训练，或者train/jupyter/seg_train.ipynb
