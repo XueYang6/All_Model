@@ -40,8 +40,6 @@ def evaluate(net, dataloader, device, amp):
                 val_recall.append(indicators_dict['recall'])
                 val_precision.append(indicators_dict['precision'])
 
-                conf_matrix = 0
-
             else:
                 assert mask_true.min() >= 0 and mask_true.max() < net.n_classes, \
                     'True mask indices should be in [0, n_classes]'
@@ -59,4 +57,4 @@ def evaluate(net, dataloader, device, amp):
 
     net.train()
 
-    return [val_dice, val_iou, val_f1, val_recall, val_precision, conf_matrix]
+    return [val_dice, val_iou, val_f1, val_recall, val_precision]

@@ -2,6 +2,7 @@
 import csv
 import logging
 import numpy as np
+import cv2 as cv
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -181,3 +182,28 @@ def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: 
     plt.savefig(save_path, dpi=500)
     logging.info('Save Cam')
     plt.close()
+
+
+class ToHSV(object):
+    """Convert a PIL image or tensor to HSV color space."""
+    def __call__(self, image):
+        return image.convert('HSV')
+
+
+class ApplyCLAHE(object):
+    def __init__(self, clip_limit=2.0, tile_grid_size=(8, 8)):
+        self.clip_limit = clip_limit
+        self.tile_grid_size = tile_grid_size
+
+    def __call__(self, image):
+        clahe = cv.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
+        image = np.array(image)
+        if image.shape[-1] == 3:  # if RGB
+            # apply CLAHE to each channel
+            image = cv.cvtColor(image, cv.COLOR_RGB2LAB)  # turn to LAB
+            image[..., 0] = clahe.apply(image[..., 0])  # Apply CLAHE only to luma channel
+            image = cv.cvtColor(image, cv.COLOR_LAB2RGB)  # turn back to RGB
+        else:
+            image = clahe.apply(image)
+        return Image.fromarray(image)
+

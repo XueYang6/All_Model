@@ -10,10 +10,13 @@ from os.path import splitext, isfile, join
 from pathlib import Path
 from .image2json import remap_mask_classes
 
+
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, random_split
-from torchvision.transforms.functional import to_pil_image
+from torchvision import transforms
+from torchvision.transforms.functional import to_tensor, pil_to_tensor, to_pil_image
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -205,9 +208,10 @@ class SegmentationDatasetDirectory(Dataset):
 
 
 class ClassificationDatasetJson(Dataset):
-    def __init__(self, json_dir: str, size: tuple = (512, 512)):
+    def __init__(self, json_dir: str, size: tuple = (512, 512), transform=None):
         assert 0 < size[0], "size must > 0"
         self.size = size
+        self.transform = transform
 
         with open(json_dir, 'r') as json_file:
             data = json.load(json_file)
@@ -224,11 +228,12 @@ class ClassificationDatasetJson(Dataset):
         image = Image.open(image_path)
         filename = item['filename']
 
-        image = preprocess(image, is_mask=False, size=self.size)
+        if self.transform:
+            image = self.transform(image)
 
         return {
-            'images': torch.as_tensor(image.copy()).float().contiguous(),
-            'labels': torch.tensor(label, dtype=torch.int),
+            'images': image.float().contiguous(),
+            'labels': torch.tensor(label, dtype=torch.int64),
             'filenames': filename
         }
 

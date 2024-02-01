@@ -20,8 +20,8 @@ from models.seg.MaskRCNN.model import MaskRCNNResNet50
 from utils.indicators import segmentation_indicators
 from utils.utils import EarlyStopping
 
-image_dir = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_IMAGES'
-mask_dir = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_MASKS_RENAME'
+image_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_IMAGES'
+mask_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_MASKS'
 
 
 def get_args():
@@ -139,7 +139,7 @@ def train_model(
         # Record the number of verifications performed in each epoch
         val_times_every_epoch = 0
 
-        with (tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar):
+        with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
                 images, true_masks = batch['images'], batch['masks']
 

@@ -16,10 +16,11 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
+from torchvision import transforms
 
 from clf_evaluate import evaluate_model
 from utils.data_loading import ClassificationDatasetJson
-from utils.utils import EarlyStopping, stratified_split
+from utils.utils import EarlyStopping, stratified_split, ToHSV, ApplyCLAHE
 from models.clf.ResNet.resnet import ResNetClassification
 from models.clf.EfficientNet.model import EfficientNetClassification
 
@@ -75,8 +76,15 @@ def classification_train(
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')
     dir_indicators_save = Path(f'{dir_indicators}/{now_time}/{now_h}')
 
+    # transform
+    transform = transforms.Compose([
+        transforms.Resize(size),
+        ToHSV(),
+        transforms.ToTensor(),
+    ])
+
     # Create dataset
-    dataset = ClassificationDatasetJson(json_dir=json_data_path, size=size)
+    dataset = ClassificationDatasetJson(json_dir=json_data_path, size=size, transform=transform)
     classes = dataset.get_classes()
     assert num_classes == len(classes), f'The output category of the model_name does not match the category in the json data'
 
