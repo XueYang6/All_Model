@@ -166,9 +166,10 @@ class SegmentDatasetJson(Dataset):
 
 
 class SegmentationDatasetDirectory(Dataset):
-    def __init__(self, image_dir, mask_dir, size: tuple = (512, 512), mask_values=None):
+    def __init__(self, image_dir, mask_dir, size: tuple = (512, 512), mask_values=None, transform=None):
         self.images_dir = Path(image_dir)
         self.mask_dir = Path(mask_dir)
+        self.transform = transform
 
         assert mask_values is not None, "mask values must not None"
         assert 0 < size[0], "size must > 0"
@@ -195,11 +196,12 @@ class SegmentationDatasetDirectory(Dataset):
         remapped_mask = remap_mask_classes(np.array(mask), self.mask_values)
         mask = Image.fromarray(remapped_mask)
 
-        image = preprocess(image, self.size, False, self.mask_values)
+        if self.transform:
+            image = self.transform(image)
         mask = preprocess(mask, self.size, True, self.mask_values)
 
         return {
-            'images': torch.as_tensor(image.copy()).float().contiguous(),
+            'images': image.float().contiguous(),
             'masks': torch.as_tensor(mask.copy()).long().contiguous()
         }
 
