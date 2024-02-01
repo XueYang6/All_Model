@@ -27,12 +27,12 @@ from models.clf.EfficientNet.model import EfficientNetClassification
 
 MODEL = ['RES-NET', 'EFFICIENT-NET']
 
-json_data_path = '../datas/json_data/MelNvTrain_dataset.json'
+json_data_path = '../datasets/json/MelNvTrain_dataset.json'
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the  model_name')
-    parser.add_argument('--model_name', '-m', type=str, default='RES-NET',
+    parser.add_argument('--model_name', '-m', type=str, default='EFFICIENT-NET',
                         help="select train model_name")
     parser.add_argument('--size', '-s', type=tuple, default=(256, 256),
                         help='set images size')
@@ -69,8 +69,8 @@ def classification_train(
     now_time = datetime.now().strftime("%Y-%m-%d")  # Get the current time in a specific format
     now_h = datetime.now().strftime("%H")
 
-    dir_checkpoint = Path(f'./MelNv/checkpoints/{model_name}')
-    dir_indicators = Path(f'./MelNv/indicators/{model_name}')
+    dir_checkpoint = Path(f'./MelNv/checkpoints/{model_name}_b1')
+    dir_indicators = Path(f'./MelNv/indicators/{model_name}_b1')
     Path(f'{dir_checkpoint}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     Path(f'{dir_indicators}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')
@@ -79,7 +79,7 @@ def classification_train(
     # transform
     transform = transforms.Compose([
         transforms.Resize(size),
-        ToHSV(),
+        ApplyCLAHE(),
         transforms.ToTensor(),
     ])
 

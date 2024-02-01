@@ -262,6 +262,7 @@ def merge_masks(masks):
     combined_mask = torch.max(masks, dim=0)[0]  # Take the maximum merge mask
     return combined_mask
 
+
 if __name__ == "__main__":
     logging.info('Start Test')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

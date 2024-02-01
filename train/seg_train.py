@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from torchvision import transforms
 
-import wandb
 from seg_evaluate import evaluate
 from models.seg.UNet.unet_model import UNet, R2UNet
 from utils.data_loading import SegmentDatasetJson, SegmentationDatasetDirectory
@@ -87,13 +86,6 @@ def train_model(
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
-
-    # Initialize logging
-    experiment = wandb.init(project=model_name, resume='allow', anonymous='must')
-    experiment.config.update(
-        dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-             val_percent=val_percent, save_checkpoint=save_checkpoint, size=size, amp=amp)
-    )
 
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -188,11 +180,6 @@ def train_model(
                 epoch_train_f1 = np.append(epoch_train_f1, train_indicators_dict['f1'])
                 epoch_train_recall = np.append(epoch_train_recall, train_indicators_dict['recall'])
                 epoch_train_precision = np.append(epoch_train_precision, train_indicators_dict['precision'])
-                experiment.log({
-                    'train loss': loss.item(),
-                    'step': global_step,
-                    'epoch': epoch
-                })
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round every 5 batch size do a evaluation
@@ -227,21 +214,6 @@ def train_model(
                         logging.info('Validation Precision score: {}'.format(np.round(val_precision_avg, 3)))
 
                         scheduler.step(val_dice_avg)
-                        experiment.log({
-                            'learning rate': optimizer.param_groups[0]['lr'],
-                            'validation Dice': val_dice_avg,
-                            'validation Iou': val_iou_avg,
-                            'validation F1': val_f1_avg,
-                            'validation Recall': val_recall_avg,
-                            'validation Precision': val_precision_avg,
-                            'images_0': wandb.Image(images[0].cpu()),
-                            'masks_f': {
-                                'true': wandb.Image(true_masks[0].float().cpu()),
-                                'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                            },
-                            'step': global_step,
-                            'epoch': epoch
-                        })
 
             # Validation is performed every 1/5 of training
             stage = len(train_loader)
