@@ -11,6 +11,7 @@ from pathlib import Path
 from torch import optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
+from torchvision import transforms
 
 import wandb
 from seg_evaluate import evaluate
@@ -18,7 +19,7 @@ from models.seg.UNet.unet_model import UNet, R2UNet
 from utils.data_loading import SegmentDatasetJson, SegmentationDatasetDirectory
 from models.seg.MaskRCNN.model import MaskRCNNResNet50
 from utils.indicators import segmentation_indicators
-from utils.utils import EarlyStopping
+from utils.utils import EarlyStopping, ToHSV, ApplyCLAHE
 
 image_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_IMAGES'
 mask_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_MASKS'
@@ -67,8 +68,15 @@ def train_model(
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')
     dir_indicators_save = Path(f'{dir_indicators}/{now_time}/{now_h}')
 
+    # transform
+    transform = transforms.Compose([
+        transforms.Resize(size),
+        ApplyCLAHE(),
+        transforms.ToTensor(),
+    ])
+
     # Create dataset
-    dataset = SegmentationDatasetDirectory(image_dir, mask_dir, size, [0, 255])
+    dataset = SegmentationDatasetDirectory(image_dir, mask_dir, size, [0, 255], transform=transform)
 
     # Split into train / validation partitions
     n_val = int(len(dataset) * val_percent)
@@ -162,8 +170,7 @@ def train_model(
                         loss = criterion(masks_pred, true_masks)
                         train_indicators_dict = segmentation_indicators(F.softmax(masks_pred, dim=1).float(),
                                                                         F.one_hot(true_masks, model.n_classes).
-                                                                        permute(0, 3, 1, 2).float(), multi_class=True,
-                                                                        reduce_batch_first=True, places=3)
+                                                                        permute(0, 3, 1, 2).float(), multi_class=True, places=3)
                 d_loss = 1 - train_indicators_dict['dice']
                 loss += d_loss
                 optimizer.zero_grad(set_to_none=True)
