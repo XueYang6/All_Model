@@ -20,8 +20,8 @@ from models.seg.MaskRCNN.model import MaskRCNNResNet50
 from utils.indicators import segmentation_indicators
 from utils.utils import EarlyStopping, ToHSV, ApplyCLAHE
 
-image_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_IMAGES'
-mask_dir = 'E:/Datas/work/HairEffect/SegmentData/DEMO_MASKS'
+image_dir = 'E:/HuiHu/bcc/images'
+mask_dir = 'E:/HuiHu/bcc/masks'
 
 
 def get_args():
@@ -37,7 +37,7 @@ def get_args():
                         help='Percent of the data that is used as validation (0-100)')
     parser.add_argument('--amp', action='store_true', default=True, help='Use mixed precision')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upSampling')
-    parser.add_argument('--n_classes', '-c', type=int, default=2, help='Number of n_classes')
+    parser.add_argument('--n_classes', '-c', type=int, default=1, help='Number of n_classes')
 
     return parser.parse_args()
 
@@ -104,7 +104,7 @@ def train_model(
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     early_stopping = EarlyStopping(patience=5, verbose=True)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss() if model.n_classes == 1 else nn.CrossEntropyLoss()
     global_step = 0
     best_dice = 0
 
@@ -141,7 +141,7 @@ def train_model(
 
         with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
-                images, true_masks = batch['images'], batch['masks']
+                images, masks = batch['images'], batch['masks']
 
                 assert images.shape[1] == model.n_channels, \
                     f'Network has been defined with {model.n_channels} input channels, ' \
@@ -149,20 +149,23 @@ def train_model(
                     'the images_0 are loaded correctly.'
 
                 images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
-                true_masks = true_masks.to(device=device, dtype=torch.long)
 
                 with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
                     masks_pred = model(images)
                     if model.n_classes == 1:
-                        loss = criterion(masks_pred.squeeze(1), true_masks.float())
+                        true_masks = masks.to(device=device, dtype=torch.float)
+                        loss = criterion(masks_pred, true_masks.unsqueeze(1))
                         train_indicators_dict = segmentation_indicators(F.sigmoid(masks_pred.squeeze(1)),
-                                                                        true_masks.float(), multi_class=False,
+                                                                        true_masks.squeeze(1).float(), multi_class=False,
                                                                         reduce_batch_first=True, places=3)
                     else:
+                        true_masks = masks.to(device=device, dtype=torch.long)
                         loss = criterion(masks_pred, true_masks)
                         train_indicators_dict = segmentation_indicators(F.softmax(masks_pred, dim=1).float(),
                                                                         F.one_hot(true_masks, model.n_classes).
-                                                                        permute(0, 3, 1, 2).float(), multi_class=True, places=3)
+                                                                        permute(0, 3, 1, 2).float(), multi_class=True,
+                                                                        reduce_batch_first=True, places=3)
+
                 d_loss = 1 - train_indicators_dict['dice']
                 loss += d_loss
                 optimizer.zero_grad(set_to_none=True)

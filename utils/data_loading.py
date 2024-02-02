@@ -187,7 +187,6 @@ class SegmentationDatasetDirectory(Dataset):
         name = self.ids[idx]
         mask_file = list(self.mask_dir.glob(name + '.*'))
         image_file = list(self.images_dir.glob(name + '.*'))
-
         assert len(image_file) == 1, f'Either no images or multiple images_0 found for the ID{name}: {image_file}'
         assert len(mask_file) == 1, f'Either no mask or multiple masks_f found for the ID{name}: {mask_file}'
 

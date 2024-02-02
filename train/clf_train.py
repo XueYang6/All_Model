@@ -69,8 +69,8 @@ def classification_train(
     now_time = datetime.now().strftime("%Y-%m-%d")  # Get the current time in a specific format
     now_h = datetime.now().strftime("%H")
 
-    dir_checkpoint = Path(f'./MelNv/checkpoints/{model_name}_b1')
-    dir_indicators = Path(f'./MelNv/indicators/{model_name}_b1')
+    dir_checkpoint = Path(f'./train_save/MelNv/checkpoints/{model_name}_b1')
+    dir_indicators = Path(f'./train_save/MelNv/indicators/{model_name}_b1')
     Path(f'{dir_checkpoint}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     Path(f'{dir_indicators}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')

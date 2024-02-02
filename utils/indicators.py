@@ -25,39 +25,47 @@ def segmentation_indicators(input: Tensor, target: Tensor, multi_class: bool = F
 
     # Validate input dimensions
     assert input.size() == target.size(), f'input size{input.size()} must same as {target.size()}'
-    assert input.dim() == 3 or not reduce_batch_first, f'input dim:{input.dim()}'
 
-    if multi_class:
-        input = input.flatten(0, 1)
-        target = target.flatten(0, 1)
+    if reduce_batch_first:
+        if multi_class:
+            num_classes = input.shape[1]
+            batch_size, _, height, width = input.shape
+            input = input.permute(1, 0, 2, 3).reshape(num_classes, -1, height, width)
+            target = target.permute(1, 0, 2, 3).reshape(num_classes, -1, height, width)
+        else:
+            # For binary segmentation, flatten the batch and height*width dimensions
+            input = input.reshape(-1, input.size(-2) * input.size(-1))
+            target = target.reshape(-1, target.size(-2) * target.size(-1))
 
-    # Define sum dimensions
-    sum_dim = (-1, -2) if input.dim() == 2 or not reduce_batch_first else (-1, -2, -3)
+    metrics = {'dice': [], 'iou': [], 'f1': [], 'precision': [], 'recall': []}
+    for cls in range(input.shape[1] if multi_class else 1):
+        if multi_class:
+            input_cls = input[:, cls, :, :]
+            target_cls = target[:, cls, :, :]
+        else:
+            input_cls = input
+            target_cls = target
 
-    # Calculate true positive, false positive, true negative, false negative
-    tp = (input * target).sum(dim=sum_dim)
-    fp = input.sum(dim=sum_dim) - tp
-    fn = target.sum(dim=sum_dim) - tp
+        tp = (input_cls * target_cls).sum(dim=(-2, -1))
+        fp = input_cls.sum(dim=(-2, -1)) - tp
+        fn = target_cls.sum(dim=(-2, -1)) - tp
 
-    # Calculate precision, recall, dice, iou, and f1 score
-    precision = tp / (tp + fp + epsilon)
-    recall = tp / (tp + fn + epsilon)
+        precision = (tp + epsilon) / (tp + fp + epsilon)
+        recall = (tp + epsilon) / (tp + fn + epsilon)
+        dice = (2 * tp + epsilon) / (tp + tp + fp + fn + epsilon)
+        iou = (tp + epsilon) / (tp + fp + fn + epsilon)
+        f1_score = (2 * precision * recall) / (precision + recall + epsilon)
 
-    inter = tp
+        metrics['dice'].append(dice.mean().item())
+        metrics['iou'].append(iou.mean().item())
+        metrics['f1'].append(f1_score.mean().item())
+        metrics['precision'].append(precision.mean().item())
+        metrics['recall'].append(recall.mean().item())
 
-    union = input.sum(dim=sum_dim) + target.sum(dim=sum_dim) - tp
+        # Average the metrics across classes
+    averaged_metrics = {k: np.round(np.mean(v), places) for k, v in metrics.items()}
 
-    dice = (2 * tp / (union + epsilon)).mean().item()
-    iou = (inter / (union + epsilon)).mean().item()
-    f1_score = (2 * precision * recall / (precision + recall + epsilon)).mean().item()
-
-    return {
-            'dice': np.round(dice, places),
-            'iou': np.round(iou, places),
-            'f1': np.round(f1_score, places),
-            'precision': np.round(precision.mean().item(), places),
-            'recall': np.round(recall.mean().item(), places)
-        }
+    return averaged_metrics
 
 
 def box_iou(box1, box2):

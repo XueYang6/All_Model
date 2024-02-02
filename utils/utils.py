@@ -197,13 +197,17 @@ class ApplyCLAHE(object):
 
     def __call__(self, image):
         clahe = cv.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
-        image = np.array(image)
-        if image.shape[-1] == 3:  # if RGB
+        image_np = np.array(image)
+        if image_np.ndim == 3 and image_np.shape[2] == 3:  # if RGB
             # apply CLAHE to each channel
-            image = cv.cvtColor(image, cv.COLOR_RGB2LAB)  # turn to LAB
-            image[..., 0] = clahe.apply(image[..., 0])  # Apply CLAHE only to luma channel
-            image = cv.cvtColor(image, cv.COLOR_LAB2RGB)  # turn back to RGB
+            image_lab = cv.cvtColor(image_np , cv.COLOR_RGB2LAB)  # turn to LAB
+            image_lab[..., 0] = clahe.apply(image_lab[..., 0])  # Apply CLAHE only to luma channel
+            image_np = cv.cvtColor(image_lab, cv.COLOR_LAB2RGB)  # turn back to RGB
+        elif image_np.ndim == 2 or (image_np.ndim == 3 and image_np.shape[2] == 1):  # Grayscale
+            image_np = clahe.apply(image_np)
         else:
-            image = clahe.apply(image)
-        return Image.fromarray(image)
+
+            Image.fromarray(image_np).convert('RGB').save('1.jpg')
+            raise ValueError("Unsupported image format for CLAHE")
+        return Image.fromarray(image_np)
 
