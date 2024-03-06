@@ -195,7 +195,8 @@ def show_cam_on_image(img: np.ndarray,
     :param colormap: The OpenCV colormap to be used.
     :returns: The default images with the cam overlay.
     """
-
+    mask = np.clip(mask, 0, 1)
+    mask = np.nan_to_num(mask, nan=0.0, posinf=1.0, neginf=0.0)
     heatmap = cv.applyColorMap(np.uint8(255 * mask), colormap)
     if use_rgb:
         heatmap = cv.cvtColor(heatmap, cv.COLOR_BGR2RGB)
@@ -229,9 +230,9 @@ def center_crop_img(img: np.ndarray, size: int):
 
     if new_w == size:
         h = (new_h - size) // 2
-        img = img[h: h+size]
+        img = img[h: h + size]
     else:
         w = (new_w - size) // 2
-        img = img[:, w: w+size]
+        img = img[:, w: w + size]
 
     return img

@@ -18,6 +18,9 @@ from PIL import Image
 import torch
 from torch.utils.data import Subset
 import torchvision.transforms as transforms
+from utils.data_loading import remap_mask_classes
+from .metrics import proba_metrics, euclidean_distance
+
 
 dpi = 500
 
@@ -31,9 +34,6 @@ def std_mpl():
     mpl.rcParams['axes.spines.top'] = False
     mpl.rcParams['axes.spines.right'] = False
     mpl.rcParams['axes.grid'] = False
-
-    legend = plt.legend()
-    legend.set_frame_on(False)
 
 
 def stratified_split(dataset, test_size, random_state=0):
@@ -97,7 +97,7 @@ def save_indicators2csv(all_losses, name, location):
 
 def draw_roc(true, proba, title, class_labels):
     # Check if `proba` is a 2D array and has more than one class
-    if proba.ndim == 2 and proba.shape[1] > 1:
+    if proba.ndim == 2 and proba.shape[0] > 1:
         # Calculating the ROC AUC score for multi-class
         auc = metrics.roc_auc_score(true, proba, multi_class='ovo')
 
@@ -105,7 +105,7 @@ def draw_roc(true, proba, title, class_labels):
         fpr = dict()
         tpr = dict()
         roc_auc = dict()
-        n_classes = proba.shape[1]
+        n_classes = proba.shape[0]
         for i in range(n_classes):
             fpr[i], tpr[i], _ = metrics.roc_curve(true, proba[:, i], pos_label=i)
             roc_auc[i] = metrics.auc(fpr[i], tpr[i])
@@ -121,7 +121,7 @@ def draw_roc(true, proba, title, class_labels):
         auc = metrics.roc_auc_score(true, proba)
         fpr, tpr, thresholds_test = metrics.roc_curve(true, proba)
         fig, ax = plt.subplots(figsize=(8, 6), dpi=2000)
-        ax.plot(fpr, tpr, color='black', lw=1.5, label='ROC curve (area = %0.4f)' % auc)
+        ax.plot(fpr, tpr, color='orange', lw=1.5, label='ROC curve (area = %0.4f)' % auc)
         ax.plot([0, 1], [0, 1], color='#d8d8d8', lw=1.5, linestyle='--')
         ax.set_xlim([0.0, 1.0])
         ax.set_ylim([0.0, 1.05])
@@ -130,7 +130,9 @@ def draw_roc(true, proba, title, class_labels):
         ax.set_title(title)
         ax.spines['top'].set_color('none')  # 将顶部边框线颜色设置为透明
         ax.spines['right'].set_color('none')  # 将右侧边框线颜色设置为透明
-        plt.legend(loc="lower right")
+        ax.set_facecolor('white')
+        fig.patch.set_facecolor('white')
+        plt.legend(loc="lower right", frameon=False)
 
 
 def draw_confusion_matrix(true, y_pre, display_labels, title='Confusion Matrix'):
@@ -142,19 +144,25 @@ def draw_confusion_matrix(true, y_pre, display_labels, title='Confusion Matrix')
     plt.title(title)
 
 
-def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int, save_path: str):
+def get_cam_value(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int):
     data_transform = transforms.Compose([transforms.ToTensor(),
                                          transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
                                          ])
-
     image = pil_image.convert('RGB')
     image = np.array(image, dtype=np.uint8)
     image_tensor = data_transform(image)
     input_tensor = torch.unsqueeze(image_tensor, dim=0)
-
     cam = GradCAM(model=model, target_layers=target_layers, use_cuda=cuda)
     grayscale_cam = cam(input_tensor=input_tensor, target_category=target_category)
-    grayscale_cam = grayscale_cam[0, :]
+
+    return grayscale_cam[0, :]
+
+
+def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int, save_path: str):
+    image = pil_image.convert('RGB')
+    image = np.array(image, dtype=np.uint8)
+
+    grayscale_cam = get_cam_value(model, target_layers, cuda, pil_image, target_category)
     visualization = show_cam_on_image(image.astype(dtype=np.float32) / 255.,
                                       grayscale_cam,
                                       use_rgb=True)
@@ -184,6 +192,39 @@ def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: 
     plt.close()
 
 
+def calculate_mask_centroid(mask: np.array):
+    assert mask.ndim == 2, "Mask must be 2D"
+
+    non_zero_position = np.argwhere(mask > 0)
+
+    centroid = np.mean(non_zero_position, axis=0)
+
+    return tuple(np.round(centroid).astype(int))
+
+
+def get_cam_salient_center(cam):
+    max_val = np.max(cam)
+    max_positions = np.argwhere(cam == max_val)
+    max_position = tuple(max_positions[0])
+
+    return max_position, max_val
+
+
+def get_cam_metrics(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int, true_mask, save_name=None):
+    grayscale_cam = get_cam_value(model, target_layers, cuda, pil_image, target_category)
+    max_position, max_val = get_cam_salient_center(grayscale_cam)
+    centroid = calculate_mask_centroid(true_mask)
+
+    dx, dy, distance = euclidean_distance(max_position, centroid)
+
+    if save_name is not None:
+        cam = np.uint8(255 * grayscale_cam)
+        cv.imwrite(f'./test/cam/{save_name}.jpg', cam)
+
+    iou, dice = proba_metrics(grayscale_cam, true_mask, save_name=save_name)
+    return iou, dice, distance
+
+
 class ToHSV(object):
     """Convert a PIL image or tensor to HSV color space."""
     def __call__(self, image):
@@ -191,18 +232,38 @@ class ToHSV(object):
 
 
 class ApplyCLAHE(object):
-    def __init__(self, clip_limit=2.0, tile_grid_size=(8, 8)):
+    def __init__(self, clip_limit=2.0, tile_grid_size=(8, 8), channel='RGB', enhance: int = 0):
+        self.color_spaces = ['RGB', 'LAB', 'HSV']
+
         self.clip_limit = clip_limit
         self.tile_grid_size = tile_grid_size
+        assert channel.upper() in self.color_spaces, f'choose channel in {self.color_spaces}, but give {channel}'
+        self.channel = channel.upper()
+        self.enhance = enhance
+
+    def convert_color_space(self, image):
+        if self.channel == 'LAB':
+            return cv.cvtColor(image, cv.COLOR_RGB2LAB)
+        if self.channel == 'HSV':
+            return cv.cvtColor(image, cv.COLOR_RGB2HSV)
+        return image
+
+    def convert_back2rgb(self, image):
+        if self.channel == 'LAB':
+            return cv.cvtColor(image, cv.COLOR_LAB2RGB)
+        if self.channel == 'HSV':
+            return cv.cvtColor(image, cv.COLOR_HSV2RGB)
+        return image
 
     def __call__(self, image):
         clahe = cv.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
         image_np = np.array(image)
-        if image_np.ndim == 3 and image_np.shape[2] == 3:  # if RGB
-            # apply CLAHE to each channel
-            image_lab = cv.cvtColor(image_np , cv.COLOR_RGB2LAB)  # turn to LAB
-            image_lab[..., 0] = clahe.apply(image_lab[..., 0])  # Apply CLAHE only to luma channel
-            image_np = cv.cvtColor(image_lab, cv.COLOR_LAB2RGB)  # turn back to RGB
+
+        if image_np.ndim == 3 and image_np.shape[2] == 3:  # if 3 channel
+            # apply CLAHE enhance channel
+            converted_image = self.convert_color_space(image_np)
+            converted_image[..., self.enhance] = clahe.apply(converted_image[..., self.enhance])  # Apply CLAHE
+            image_np = self.convert_back2rgb(converted_image)
         elif image_np.ndim == 2 or (image_np.ndim == 3 and image_np.shape[2] == 1):  # Grayscale
             image_np = clahe.apply(image_np)
         else:
@@ -211,3 +272,38 @@ class ApplyCLAHE(object):
             raise ValueError("Unsupported image format for CLAHE")
         return Image.fromarray(image_np)
 
+
+def show_transformed_images(image_path, transform):
+    # original image
+    original_image = Image.open(image_path).convert('RGB')
+    # use transform
+    transformed_image = transform(original_image)
+
+    # back to PILImage
+    transformed_image_pil = transforms.ToPILImage()(transformed_image)
+
+    # to show image
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].imshow(original_image)
+    ax[0].set_title("Original Image")
+    ax[0].axis('off')
+
+    ax[1].imshow(transformed_image_pil)
+    ax[1].set_title("Transformed Image")
+    ax[1].axis('off')
+
+    plt.show()
+
+
+def mask2image(mask_path, image_path, save_path, size):
+    image = cv.imread(image_path)
+    mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)
+
+    image_resized = cv.resize(image, size, interpolation=cv.INTER_AREA)
+    mask_resized = cv.resize(mask, size, interpolation=cv.INTER_AREA)
+
+    mask_np = remap_mask_classes(mask=mask_resized, unique_values=[0, 255])
+
+    binary_mask_3channel = cv.cvtColor(mask_np, cv.COLOR_GRAY2BGR)
+    result = cv.bitwise_and(image_resized, binary_mask_3channel)
+    cv.imwrite(save_path, result)

@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
                              average_precision_score, confusion_matrix)
@@ -19,22 +20,22 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
 from models.clf.EfficientNet.model import EfficientNetClassification
 from models.clf.ResNet.resnet import ResNetClassification
 from utils.data_loading import ClassificationDatasetJson
-from utils.utils import std_mpl, draw_roc, draw_confusion_matrix, draw_grad_cam
+from utils.utils import std_mpl, draw_roc, draw_confusion_matrix, draw_grad_cam, ToHSV, ApplyCLAHE
 
 now_time = datetime.now().strftime("%Y-%m-%d")
 now_h = datetime.now().strftime("%H")
 
 MODEL = ['RES-NET', 'EFFICIENT-NET']
 
-model_path = '../train/MelNv/checkpoints/RES-NET/2024-01-27/22/best.pth'
-test_json_path = '../datas/json_data/MelNvWithTrain_dataset.json'
-output_path = 'Output/MelNv/WithHair'
+model_path = '../train/train_save/checkpoints/MelNvMask2Image/EFFICIENT-NET_b1/2024-02-16/09/best.pth'
+test_json_path = '../datasets/json/MelNvTestMask2ImageWithHairTrain_dataset.json'
+output_path = 'Output/MelNv/'
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict labels from input images')
     parser.add_argument('--model_name', '-m', type=str, nargs='+',
-                        default='RES-NET', help='Specify the file in which the model is stored')
+                        default='EFFICIENT-NET', help='Specify the file in which the model is stored')
     parser.add_argument('--load-model', '-lm', metavar='FILE', nargs='+',
                         default=model_path, help='Specify the file in which the model is stored')
     parser.add_argument('--size', '-s', type=tuple,
@@ -83,7 +84,6 @@ def clf_predict(
         device,
         amp,
         last_layer,
-        cam_value,
         cam_save_path
 
 ):
@@ -123,7 +123,6 @@ def clf_predict(
             # draw grad-cam
             if last_layer is not None:
                 cam_value = int(predicted[0])
-                print(cam_value)
                 full_cam_save_path = f'{cam_save_path}{cam_value}_{label.cpu().numpy()[0]}'
                 if not os.path.exists(full_cam_save_path):
                     os.makedirs(full_cam_save_path)
@@ -144,12 +143,18 @@ if __name__ == "__main__":
     size = args.size
     output_folder = args.output
     viz = args.viz
-    cam_value = args.cam_value
     threshold = args.threshold
     amp = args.amp
 
     # create dataset and data loaders
-    test_dataset = ClassificationDatasetJson(json_folder, size=args.size)
+    # transform
+    transform = transforms.Compose([
+        transforms.Resize(size),
+        ApplyCLAHE(),
+        transforms.ToTensor(),
+    ])
+
+    test_dataset = ClassificationDatasetJson(json_folder, size=args.size, transform=transform)
     loader_args = dict(batch_size=1, num_workers=os.cpu_count(), pin_memory=True)
     test_loader = DataLoader(test_dataset, shuffle=True, **loader_args)
     classes = test_dataset.get_classes()
@@ -180,7 +185,7 @@ if __name__ == "__main__":
 
     # initial matplotlib and save path
     std_mpl()
-    output_path_final = f'{output_folder}/{model_name}/{now_time}/{now_h}'
+    output_path_final = f'{output_folder}/{model_name}/mask2image_with'
     cam_save_path = f'{output_path_final}/CAM'
     os.makedirs(output_path_final, exist_ok=True)
 
@@ -193,7 +198,6 @@ if __name__ == "__main__":
         device=device,
         amp=amp,
         last_layer=target_layer,
-        cam_value=cam_value,
         cam_save_path=cam_save_path
     )
 

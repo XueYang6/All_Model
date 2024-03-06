@@ -9,6 +9,7 @@
     <option name="namespacePackageFolders">
       <list>
         <option value="$MODULE_DIR$/train" />
+        <option value="$MODULE_DIR$/predict" />
       </list>
     </option>
   </component>

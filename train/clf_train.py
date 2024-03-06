@@ -9,7 +9,6 @@ import numpy as np
 import wandb
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, average_precision_score
-from sklearn.preprocessing import label_binarize
 
 import torch
 import torch.nn as nn
@@ -27,7 +26,7 @@ from models.clf.EfficientNet.model import EfficientNetClassification
 
 MODEL = ['RES-NET', 'EFFICIENT-NET']
 
-json_data_path = '../datasets/json/MelNvTrain_dataset.json'
+json_data_path = '../datasets/json/MelNvTestMask2ImageTrain_dataset.json'
 
 
 def get_args():
@@ -69,8 +68,8 @@ def classification_train(
     now_time = datetime.now().strftime("%Y-%m-%d")  # Get the current time in a specific format
     now_h = datetime.now().strftime("%H")
 
-    dir_checkpoint = Path(f'./train_save/MelNv/checkpoints/{model_name}_b1')
-    dir_indicators = Path(f'./train_save/MelNv/indicators/{model_name}_b1')
+    dir_checkpoint = Path(f'./train_save/checkpoints/MelNvMask2Image/{model_name}_b1')
+    dir_indicators = Path(f'./train_save/indicators/MelNvMask2Image/{model_name}_b1')
     Path(f'{dir_checkpoint}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     Path(f'{dir_indicators}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')
@@ -290,7 +289,6 @@ def classification_train(
             torch.save(state_dict, str(dir_checkpoint_save / f'last.pth'))
 
         logging.info('Finished hole train')
-
 
 if __name__ == '__main__':
     args = get_args()

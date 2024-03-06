@@ -3,7 +3,7 @@ from PIL import Image
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
-from UnetModel.utils.utils import std_mpl
+from utils.utils import std_mpl
 std_mpl()
 
 
@@ -28,18 +28,11 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
                   [255, 0, 0],
                   [0, 0, 255]]
 
-    true_mask[true_mask < 20] = 0
-    true_mask[(true_mask >= 20) & (true_mask <= 150)] = 100
-    true_mask[(true_mask > 150) & (true_mask <= 255)] = 255
-
     mask_values = np.unique(predict_mask)
+    assert mask_values.all() == np.unique(true_mask).all(), f'Predict mask values must equal to true mask values, but give {np.unique(predict_mask)}, {np.unique(true_mask),}'
     assert len(mask_values) <= 4, f"It only ready for classes <= 4 (including background) but predict_mask give ({mask_values})"
 
-    if true_mask is not None and true_mask.any():
-        t_mask_values = np.unique(true_mask)
-        assert (mask_values == t_mask_values).all(), f"predict_mask classes must equal true_mask classes, get {mask_values}, {t_mask_values}"
-
-    n_clos = 3 if true_mask is None else 4
+    n_clos = 3 if true_mask is None else 5
 
     fig, ax = plt.subplots(1, n_clos, figsize=(12, 4))
     ax[0].set_title('Input images')
@@ -56,12 +49,12 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
         mask_colorful = np.zeros_like(image)
         mask_colorful[mask.astype(bool)] = colors[i - 1]
         final_mask = cv.addWeighted(final_mask, 0.5, mask_colorful, 0.5, 0)
-
-        if n_clos == 4:
+        if true_mask is not None:
             t_mask = np.where(true_mask == mask_values[i], 1, 0)
             t_mask_colorful = np.zeros_like(image)
             t_mask_colorful[t_mask.astype(bool)] = colors[i - 1]
             final_t_mask = cv.addWeighted(final_t_mask, 0.5, t_mask_colorful, 0.5, 0)
+
     image_with_mask = cv.addWeighted(image_with_mask, 1, final_mask, 0.8, 0)
     ax[1].set_title(f'final mask')
     ax[1].imshow(final_mask)
@@ -71,15 +64,20 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
     ax[2].imshow(image_with_mask)
     ax[2].axis('off')
 
-    if n_clos == 4:
-        image_with_t_mask = cv.addWeighted(image_with_t_mask, 1, final_t_mask, 0.8, 0)
-        ax[3].set_title(f'images with true mask')
-        ax[3].imshow(image_with_t_mask)
+    if true_mask is not None:
+        ax[3].set_title(f'final mask')
+        ax[3].imshow(final_t_mask)
         ax[3].axis('off')
+
+        image_with_t_mask = cv.addWeighted(image_with_t_mask, 1, final_t_mask, 0.8, 0)
+        ax[4].set_title(f'images with true mask')
+        ax[4].imshow(image_with_t_mask)
+        ax[4].axis('off')
 
     plt.xticks([]), plt.yticks([])
     plt.savefig(save_path, dpi=500)
     logging.info('Save plot')
+    plt.close()
 
 
 def compare_images(image_pairs, titles):

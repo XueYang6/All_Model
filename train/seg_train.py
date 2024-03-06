@@ -20,8 +20,8 @@ from models.seg.MaskRCNN.model import MaskRCNNResNet50
 from utils.indicators import segmentation_indicators
 from utils.utils import EarlyStopping, ToHSV, ApplyCLAHE
 
-image_dir = 'E:/HuiHu/bcc/images'
-mask_dir = 'E:/HuiHu/bcc/masks'
+image_dir = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_IMAGES'
+mask_dir = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_MASKS_RENAME'
 
 
 def get_args():
@@ -37,7 +37,7 @@ def get_args():
                         help='Percent of the data that is used as validation (0-100)')
     parser.add_argument('--amp', action='store_true', default=True, help='Use mixed precision')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upSampling')
-    parser.add_argument('--n_classes', '-c', type=int, default=1, help='Number of n_classes')
+    parser.add_argument('--n_classes', '-c', type=int, default=2, help='Number of n_classes')
 
     return parser.parse_args()
 
@@ -60,8 +60,8 @@ def train_model(
     now_time = datetime.now().strftime("%Y-%m-%d")  # Get the current time in a specific format
     now_h = datetime.now().strftime("%H")
 
-    dir_checkpoint = Path(f'./checkpoints/{model_name}')
-    dir_indicators = Path(f'./indicators/{model_name}')
+    dir_checkpoint = Path(f'./train_save/checkpoints/MelNv/{model_name}')
+    dir_indicators = Path(f'./train_save/indicators/MelNv/{model_name}')
     Path(f'{dir_checkpoint}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     Path(f'{dir_indicators}/{now_time}/{now_h}').mkdir(parents=True, exist_ok=True)
     dir_checkpoint_save = Path(f'{dir_checkpoint}/{now_time}/{now_h}')
@@ -70,7 +70,7 @@ def train_model(
     # transform
     transform = transforms.Compose([
         transforms.Resize(size),
-        ApplyCLAHE(),
+        ApplyCLAHE(channel='HSV', enhance=1),
         transforms.ToTensor(),
     ])
 

@@ -13,14 +13,11 @@ from PIL import Image
 import matplotlib as mpl
 
 from utils.utils import draw_grad_cam, draw_roc, draw_confusion_matrix, std_mpl
-from utils.data_loading import BasicDataset
+
 from models.seg.UNet.unet_model import UNet
 from utils.plot import plot_img_and_mask
 
 std_mpl()
-classes_names = ['Cochlea space']
-position = 'left'
-
 
 def predict_img(net,
                 full_img,

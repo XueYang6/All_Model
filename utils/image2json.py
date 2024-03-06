@@ -24,6 +24,7 @@ def remap_mask_classes(mask, unique_values):
     """
     # check mask_values for duplicate values
     assert len(unique_values) == len(set(unique_values)), "The mask_values contains duplicate values!"
+    assert mask.ndim == 2, f'The mask must be grayscale, but give {mask.ndim}'
 
     remapped_mask = np.copy(mask)
     sorted_unique_values = sorted(unique_values)  # mask sure unique values are sorted
@@ -57,13 +58,15 @@ def extract_mask_coords(mask_data, unique_values):
 
 
 class ImageSegmentation2Json:
-    def __init__(self, input_folder, output_folder, masks_folder, unique_values, size):
+    def __init__(self, input_folder, output_folder, masks_folder, unique_values, size, test_ratio):
         self.input_folder = input_folder
         self.output_folder = output_folder
         self.masks_folder = masks_folder
         self.unique_values = unique_values
-        self.json_data = []
+        self.json_train_data = []
+        self.json_test_data = []
         self.size = size
+        self.test_ratio = test_ratio
 
     def process_mask(self, filename):
         try:
@@ -76,7 +79,7 @@ class ImageSegmentation2Json:
             mask_data = np.array(mask)
             remapped_mask = remap_mask_classes(mask_data, self.unique_values)
             mask = Image.fromarray(remapped_mask)
-            mask.save(f'../datas/masks/{filename}.jpg')
+            mask.save(f'1.jpg')
             # extract mask  one-dimensional coordinates
             polygons_coords = extract_mask_coords(remapped_mask, self.unique_values)
 
@@ -89,17 +92,28 @@ class ImageSegmentation2Json:
             return None
 
     def convert_images2json(self):
+        filenames = [filename for filename in os.listdir(self.input_folder)
+                     if filename.lower().endswith(('png', 'jpg', 'jpeg'))]
+        split_index = int(len(filenames) * self.test_ratio)
+        train_filenames = filenames[split_index:]
+        test_filenames = filenames[:split_index]
+
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-            futures = [executor.submit(self.process_mask, filename) for filename in os.listdir(self.input_folder)
-                       if filename.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            futures_train = [executor.submit(self.process_mask, filename) for filename in train_filenames]
+            for future in tqdm(futures_train):
+                self.json_train_data.append(future.result())
 
-            for future in tqdm(futures):
-                self.json_data.append(future.result())
+            futures_test = [executor.submit(self.process_mask, filename) for filename in test_filenames]
+            for future in tqdm(futures_test):
+                self.json_test_data.append(future.result())
 
-        json_path = self.output_folder + 'dataset.json'
+        train_json_path = self.output_folder + 'SegTrain.json'
+        test_json_path = self.output_folder + 'SegTest.json'
 
-        with open(json_path, 'w') as json_file:
-            json.dump(self.json_data, json_file, indent=4)
+        with open(train_json_path, 'w') as json_file:
+            json.dump(self.json_train_data, json_file, indent=4)
+        with open(test_json_path, 'w') as json_file:
+            json.dump(self.json_test_data, json_file, indent=4)
 
         logging.info(f"The image is successfully converted to JSON \n "
                      f"save in: {self.output_folder} \n"
@@ -284,24 +298,24 @@ class ImageClassification2Json:
 if __name__ == "__main__":
     # logging.info("Start test")
     # logging.info('Classification test')
-    # images_path = 'E:/Datas/work/HairEffect/RawData/mel_vs_nv/train/all'
-    # output_path = '../datasets/json/MelNv'
+    # images_path = 'E:/Datas/work/HairEffect/RawData/mel_vs_nv/mask2image/train/withhair'
+    # output_path = '../datasets/json/MelNvTestMask2ImageWithHair'
     # imageClf = ImageClassification2Json(images_path, output_path, test_split=0)
     # imageClf.convert_images2json()
 
-    # logging.info('Segmentation test')
-    # images_path = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_IMAGES'
-    # masks_path = 'E:/Datas/work/HairEffect/SegmentData/ISIC2018_MASKS_RENAME'
-    # output_path = '../datasets/images/Seg_ISIC2018'
-    # imageSeg = ImageSegmentation2Json(images_path, output_path, masks_path, [0, 255], (1024, 1024))
-    # imageSeg.convert_images2json()
+    logging.info('Segmentation test')
+    images_path = 'E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_images'
+    masks_path = 'E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_MASKS_RENAME'
+    output_path = '../datasets/json/HAM'
+    imageSeg = ImageSegmentation2Json(images_path, output_path, masks_path, [0, 255], (1024, 1024), 0.3)
+    imageSeg.convert_images2json()
 
-    category_ids = {1: 'disease'}
-    mask_values = [0, 255]
-    generator = MaskRCNNAnnotationGenerator('E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_images',
-                                            'E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_MASKS_RENAME',
-                                            '../datasets/json/maskrcnn_annotation_HAM10000.json',
-                                            category_ids,
-                                            mask_values)
-    generator.generate_annotations()
+    # category_ids = {1: 'disease'}
+    # mask_values = [0, 255]
+    # generator = MaskRCNNAnnotationGenerator('E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_images',
+    #                                         'E:/Datas/work/HairEffect/RawData/HAM10000/HAM10000_MASKS_RENAME',
+    #                                         '../datasets/json/maskrcnn_annotation_HAM10000.json',
+    #                                         category_ids,
+    #                                         mask_values)
+    # generator.generate_annotations()
 
