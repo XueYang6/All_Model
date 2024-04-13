@@ -1,4 +1,3 @@
-
 import csv
 import logging
 import numpy as np
@@ -20,7 +19,6 @@ from torch.utils.data import Subset
 import torchvision.transforms as transforms
 from utils.data_loading import remap_mask_classes
 from .metrics import proba_metrics, euclidean_distance
-
 
 dpi = 500
 
@@ -99,7 +97,7 @@ def draw_roc(true, proba, title, class_labels):
     # Check if `proba` is a 2D array and has more than one class
     if proba.ndim == 2 and proba.shape[0] > 1:
         # Calculating the ROC AUC score for multi-class
-        auc = metrics.roc_auc_score(true, proba, multi_class='ovo')
+        metrics.roc_auc_score(true, proba, multi_class='ovo')
 
         # Generate ROC curve values for each class
         fpr = dict()
@@ -116,7 +114,7 @@ def draw_roc(true, proba, title, class_labels):
         for i, color in zip(range(n_classes), colors):
             ax.plot(fpr[i], tpr[i], color=color, lw=2,
                     label='ROC curve of class {0} (area = {1:0.2f})'
-                    ''.format(class_labels[i], roc_auc[i]))
+                          ''.format(class_labels[i], roc_auc[i]))
     else:
         auc = metrics.roc_auc_score(true, proba)
         fpr, tpr, thresholds_test = metrics.roc_curve(true, proba)
@@ -130,9 +128,13 @@ def draw_roc(true, proba, title, class_labels):
         ax.set_title(title)
         ax.spines['top'].set_color('none')  # 将顶部边框线颜色设置为透明
         ax.spines['right'].set_color('none')  # 将右侧边框线颜色设置为透明
+        ax.spines['left'].set_color('black')
+        ax.spines['bottom'].set_color('black')
         ax.set_facecolor('white')
         fig.patch.set_facecolor('white')
         plt.legend(loc="lower right", frameon=False)
+
+    return fpr, tpr
 
 
 def draw_confusion_matrix(true, y_pre, display_labels, title='Confusion Matrix'):
@@ -158,7 +160,8 @@ def get_cam_value(model: torch.nn.Module, target_layers, cuda: bool, pil_image: 
     return grayscale_cam[0, :]
 
 
-def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int, save_path: str):
+def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int,
+                  save_path: str):
     image = pil_image.convert('RGB')
     image = np.array(image, dtype=np.uint8)
 
@@ -184,9 +187,8 @@ def draw_grad_cam(model: torch.nn.Module, target_layers, cuda: bool, pil_image: 
     cbar.set_label('Relevance', rotation=270, labelpad=15)
     cbar.ax.set_yticklabels([])  # Remove colorbar ticks
     # Define class labels (update with your own class labels)
-    class_labels = ['nv', 'bkl', 'mel', 'akiec', 'bcc', 'vasc', 'df']
     # Add a title to the plot
-    plt.title(f'{class_labels[target_category]}\'s Grad-CAM Map', fontsize=14)
+    plt.title(f' Grad-CAM Map', fontsize=14)
     plt.savefig(save_path, dpi=500)
     logging.info('Save Cam')
     plt.close()
@@ -210,23 +212,41 @@ def get_cam_salient_center(cam):
     return max_position, max_val
 
 
-def get_cam_metrics(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int, true_mask, save_name=None):
+def get_mask_max_diameter(true_mask):
+    """Calculate the size of the lesion's bounding box from the mask"""
+    rows = np.any(true_mask, axis=1)
+    cols = np.any(true_mask, axis=0)
+    y_min, y_max = np.where(rows)[0][[0, -1]]
+    x_min, x_max = np.where(cols)[0][[0, -1]]
+    width = x_max - x_min + 1
+    height = y_max - y_min + 1
+    return max(width, height)
+
+
+def get_cam_metrics(model: torch.nn.Module, target_layers, cuda: bool, pil_image: Image, target_category: int,
+                    true_mask, save_path=None):
     grayscale_cam = get_cam_value(model, target_layers, cuda, pil_image, target_category)
     max_position, max_val = get_cam_salient_center(grayscale_cam)
     centroid = calculate_mask_centroid(true_mask)
-
     dx, dy, distance = euclidean_distance(max_position, centroid)
 
-    if save_name is not None:
-        cam = np.uint8(255 * grayscale_cam)
-        cv.imwrite(f'./test/cam/{save_name}.jpg', cam)
+    max_diameter = get_mask_max_diameter(true_mask)
+    max_radius = max_diameter / 2
 
-    iou, dice = proba_metrics(grayscale_cam, true_mask, save_name=save_name)
-    return iou, dice, distance
+    if save_path is not None:
+        cam = np.uint8(255 * grayscale_cam)
+        cv.imwrite(f'{save_path}', cam)
+
+    inf1, inf2 = proba_metrics(grayscale_cam, true_mask)
+
+    inf3 = 1 - (distance / max_radius)
+    inf = (inf1 + inf2 + inf3) / 3
+    return inf1, inf2, inf3, inf
 
 
 class ToHSV(object):
     """Convert a PIL image or tensor to HSV color space."""
+
     def __call__(self, image):
         return image.convert('HSV')
 

@@ -42,4 +42,4 @@ def predict_to_mask(predict: np.ndarray, mask_values):
     for i, v in enumerate(mask_values):
         out[predict == i] = v
 
-    return Image.fromarray(out)
+    return Image.fromarray(out), out

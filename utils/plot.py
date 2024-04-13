@@ -4,6 +4,7 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.utils import std_mpl
+
 std_mpl()
 
 
@@ -23,14 +24,18 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
     if not isinstance(true_mask, np.ndarray) & (true_mask is not None):
         true_mask = np.array(true_mask)
 
-    if colors is None:
-        colors = [[0, 255, 0],
-                  [255, 0, 0],
-                  [0, 0, 255]]
+    true_colors = [[0, 255, 0],
+                   [255, 0, 0],
+                   [0, 0, 255]]
+    pred_colors = [[0, 0, 255],
+                   [0, 255, 0],
+                   [255, 0, 0]]
 
     mask_values = np.unique(predict_mask)
-    assert mask_values.all() == np.unique(true_mask).all(), f'Predict mask values must equal to true mask values, but give {np.unique(predict_mask)}, {np.unique(true_mask),}'
-    assert len(mask_values) <= 4, f"It only ready for classes <= 4 (including background) but predict_mask give ({mask_values})"
+    assert mask_values.all() == np.unique(
+        true_mask).all(), f'Predict mask values must equal to true mask values, but give {np.unique(predict_mask)}, {np.unique(true_mask),}'
+    assert len(
+        mask_values) <= 4, f"It only ready for classes <= 4 (including background) but predict_mask give ({mask_values})"
 
     n_clos = 3 if true_mask is None else 5
 
@@ -47,12 +52,12 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
     for i in range(1, len(mask_values)):
         mask = np.where(predict_mask == mask_values[i], 1, 0)
         mask_colorful = np.zeros_like(image)
-        mask_colorful[mask.astype(bool)] = colors[i - 1]
+        mask_colorful[mask.astype(bool)] = pred_colors[i - 1]
         final_mask = cv.addWeighted(final_mask, 0.5, mask_colorful, 0.5, 0)
         if true_mask is not None:
             t_mask = np.where(true_mask == mask_values[i], 1, 0)
             t_mask_colorful = np.zeros_like(image)
-            t_mask_colorful[t_mask.astype(bool)] = colors[i - 1]
+            t_mask_colorful[t_mask.astype(bool)] = true_colors[i - 1]
             final_t_mask = cv.addWeighted(final_t_mask, 0.5, t_mask_colorful, 0.5, 0)
 
     image_with_mask = cv.addWeighted(image_with_mask, 1, final_mask, 0.8, 0)
@@ -65,7 +70,7 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
     ax[2].axis('off')
 
     if true_mask is not None:
-        ax[3].set_title(f'final mask')
+        ax[3].set_title(f'true mask')
         ax[3].imshow(final_t_mask)
         ax[3].axis('off')
 
@@ -81,7 +86,6 @@ def plot_img_and_mask(image, predict_mask, true_mask=None, save_path=None, color
 
 
 def compare_images(image_pairs, titles):
-
     """
     Display multiple pairs of original and enhanced images_0 side by side for comparison.
 
@@ -91,7 +95,7 @@ def compare_images(image_pairs, titles):
     """
 
     num_pairs = len(image_pairs)
-    assert len(titles) == num_pairs,\
+    assert len(titles) == num_pairs, \
         f"Number of titles({len(titles)}) must match the number of images pairs({num_pairs})"
 
     plt.figure(figsize=(15, 5 * num_pairs))
@@ -113,5 +117,31 @@ def compare_images(image_pairs, titles):
 
     plt.tight_layout()
     plt.show()
+
+
+def show_with_colorbar(image, color_map=cv.COLORMAP_JET):
+    # 将BGR图像转换为RGB
+    image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+    # 创建颜色映射
+    norm = plt.Normalize(vmin=0, vmax=255)
+    sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('jet'), norm=norm)
+    sm.set_array([])
+
+    plt.imshow(image_rgb)
+    plt.colorbar(sm)
+    plt.show()
+
+
+def assimilation_mask_cam(mask_path, grayscale_cam_path, color_map: int=cv.COLORMAP_JET):
+    mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)
+    grayscale_cam = cv.imread(grayscale_cam_path, cv.IMREAD_GRAYSCALE)
+    color_mask = cv.applyColorMap(mask, color_map)
+    color_grayscale_cam = cv.applyColorMap(grayscale_cam, color_map)
+
+    show_with_colorbar(color_mask)
+
+    cv.imwrite('1.jpg', color_mask)
+    cv.imwrite('2.jpg', color_grayscale_cam)
 
 

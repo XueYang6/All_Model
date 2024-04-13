@@ -2,7 +2,7 @@ import numpy as np
 import cv2 as cv
 
 
-def proba_metrics(proba, true, save_name=None):
+def proba_metrics(proba, true):
     """
 
     :param proba:
@@ -16,12 +16,12 @@ def proba_metrics(proba, true, save_name=None):
     union = intersection + np.sum(proba * (1 - true))
 
     # calculate iou
-    iou = intersection / union if union != 0 else 0
+    inf1 = intersection / union if union != 0 else 0
 
     # calculate dice
-    dice = (2 * intersection) / (proba.sum() + true.sum()) if (proba.sum() + true.sum()) != 0 else 0
+    inf2 = (2 * intersection) / (proba.sum() + true.sum()) if (proba.sum() + true.sum()) != 0 else 0
 
-    return iou, dice
+    return inf1, inf2
 
 
 def euclidean_distance(point1: tuple, point2: tuple):
@@ -32,3 +32,13 @@ def euclidean_distance(point1: tuple, point2: tuple):
 
     return dx, dy, distance
 
+
+def seg_metrics(predict, true):
+    intersection = np.sum(predict*true)
+    union = np.logical_or(true, predict).sum()
+
+    iou = intersection / union if union != 0 else 0
+
+    dice = np.round(((2. * intersection) / (np.sum(true) + np.sum(predict))), 4)
+
+    return iou, dice
